@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -x
+set -e
+
+cat > /tmp/extravars.yml << EOS
+${extravars}
+EOS
+
+cat > /tmp/gitlab_config.yml << EOS
+${gitlab_config}
+EOS
+
+%{ if idle_threshold != null ~}
+sudo echo "IDLE_THRESHOLD=${idle_threshold}" > /etc/default/user-data
+%{ endif ~}
+
+export AWS_REGION=${aws_region}
+/usr/local/bin/ansible-playbook -i 'localhost,' /home/${ami_user}/gitlab_runner_init.yml -e @/tmp/extravars.yml -e @/tmp/gitlab_config.yml

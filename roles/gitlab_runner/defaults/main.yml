@@ -1,0 +1,20 @@
+---
+# defaults file for gitlab_runner
+architecture:
+  x86_64: amd64
+  arm64: arm64
+  aarch64: arm64
+
+gitlab_runner_version: 17.8.1
+gl_metrics_port: 9090
+
+users:
+  - name: '{{ ansible_user_id }}'
+    home: '{{ ansible_user_dir }}'
+  - name: root
+    home: /root
+  - name: gitlab-runner
+    home: /home/gitlab-runner
+
+docker_credhelper_config:
+  credStore: ecr-login

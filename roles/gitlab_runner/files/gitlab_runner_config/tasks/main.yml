@@ -1,0 +1,15 @@
+---
+# tasks file for gitlab_runner_config
+- name: Create a group-level runner
+  import_tasks: setup_gitlab_runner.yml
+  vars:
+    gl_action: Create
+    gl_state: present
+
+- name: Create config.toml file using jinja2
+  become: true
+  ansible.builtin.template:
+    src: config.toml.j2
+    dest: /etc/gitlab-runner/config.toml
+    mode: '0600'
+  notify: Kick gitlab-runner

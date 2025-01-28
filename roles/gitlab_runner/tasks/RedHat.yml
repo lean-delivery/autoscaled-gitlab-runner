@@ -1,0 +1,51 @@
+---
+- name: Import package signing key from gitlab repository
+  ansible.builtin.rpm_key:
+    state: present
+    key: https://packages.gitlab.com/runner/gitlab-runner/gpgkey/runner-gitlab-runner-49F16C5CC3A0F81F.pub.gpg
+
+- name: Install runner-helper images package
+  ansible.builtin.dnf:
+    name: >-
+      https://gitlab-runner-downloads.s3.amazonaws.com/v{{- gitlab_runner_version -}}
+      /rpm/gitlab-runner-helper-images.rpm
+    state: present
+  register: result
+  until: result is succeeded
+  retries: 10
+  delay: 10
+
+- name: Install gitlab-runner
+  ansible.builtin.dnf:
+    name: >-
+      https://gitlab-runner-downloads.s3.amazonaws.com/v{{- gitlab_runner_version -}}
+      /rpm/gitlab-runner_{{- architecture[ansible_architecture] -}}.rpm
+    state: present
+  register: result
+  until: result is succeeded
+  retries: 10
+  delay: 10
+
+- name: Install Docker and related packages
+  ansible.builtin.dnf:
+    name:
+      - docker
+      - amazon-ecr-credential-helper
+    state: present
+    update_cache: true
+
+- name: Install Python3.11 packages
+  ansible.builtin.dnf:
+    name:
+      - python3.11
+      - python3.11-pip
+    state: present
+
+- name: Upgrade pip packages
+  ansible.builtin.pip:
+    name:
+      - pip
+    state: present
+    extra_args: --upgrade
+    break_system_packages: true
+    executable: '{{ pip_executable }}'

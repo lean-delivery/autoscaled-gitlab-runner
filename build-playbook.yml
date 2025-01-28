@@ -1,0 +1,12 @@
+---
+- name: Configure gitlab runner
+  hosts: build
+  gather_facts: false
+  pre_tasks:
+    - name: Wait for the instance to be ready
+      ansible.builtin.wait_for_connection:
+
+    - name: Get facts
+      ansible.builtin.setup:
+  roles:
+    - role: gitlab_runner

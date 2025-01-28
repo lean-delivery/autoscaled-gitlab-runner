@@ -1,0 +1,19 @@
+---
+- name: Setup gitlab runner
+  hosts: localhost
+  connection: local
+  roles:
+    - role: gitlab_runner_config
+  post_tasks:
+    - name: Wait for metrics port to start
+      ansible.builtin.wait_for:
+        port: '{{ gl_metrics_port }}'
+        state: started
+
+    - name: Complete start lifecycle hook
+      community.aws.autoscaling_complete_lifecycle_action:
+        region: '{{ ansible_ec2_placement_region }}'
+        asg_name: 'glab-runner-{{ environment_name }}'
+        lifecycle_hook_name: 'glab-runner-{{ environment_name }}-start'
+        lifecycle_action_result: CONTINUE
+        instance_id: '{{ ansible_ec2_instance_id }}'

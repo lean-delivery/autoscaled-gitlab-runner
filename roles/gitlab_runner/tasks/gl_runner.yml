@@ -1,0 +1,30 @@
+---
+
+- name: Enable and stop the gitlab-runner service
+  ansible.builtin.systemd:
+    name: gitlab-runner
+    enabled: true
+    state: stopped
+
+- name: Copy gitlab_runner_config role to user home
+  ansible.builtin.copy:
+    src: gitlab_runner_config
+    dest: '{{ ansible_user_dir }}'
+    owner: '{{ ansible_user_id }}'
+    group: '{{ ansible_user_id }}'
+    mode: '0755'
+
+- name: Copy ansible playbooks to user home
+  ansible.builtin.copy:
+    src: '{{ playbook_item }}'
+    dest: '{{ ansible_user_dir }}/{{ playbook_item }}'
+    owner: '{{ ansible_user_id }}'
+    group: '{{ ansible_user_id }}'
+    mode: '0644'
+  loop:
+    - gitlab_runner_init.yml
+    - gitlab_runner_unreg.yml
+    - scale_up.yml
+    - terminate.yml
+  loop_control:
+    loop_var: playbook_item

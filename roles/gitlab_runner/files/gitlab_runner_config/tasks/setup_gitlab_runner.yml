@@ -1,0 +1,20 @@
+---
+- name: Get ec2 metadata facts
+  amazon.aws.ec2_metadata_facts:
+
+- name: '{{ gl_action }} a group-level runner tasks'
+  module_defaults:
+    community.general.gitlab_runner:
+      api_url: '{{ gl_url }}'
+      api_token: '{{ gl_api_token }}'
+      description: 'Docker runner {{ ansible_ec2_instance_id }}'
+      active: true
+      tag_list: '{{ gl_runner_docker_tags }}'
+      run_untagged: false
+      locked: false
+      group: '{{ gl_group_id }}'
+  block:
+    - name: '{{ gl_action }} a group-level runner' # noqa args[module] name[template]
+      community.general.gitlab_runner:
+        state: '{{ gl_state }}'
+      register: gitlab

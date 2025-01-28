@@ -1,0 +1,27 @@
+---
+- name: Remove gitlab runner
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Stop gitlab-runner
+      ansible.builtin.systemd:
+        name: gitlab-runner
+        state: stopped
+      become: true
+
+    - name: Remove gitlab runner
+      ansible.builtin.import_role:
+        name: gitlab_runner_config
+        tasks_from: setup_gitlab_runner
+      vars:
+        gl_action: Remove
+        gl_state: absent
+
+    - name: Complete termination lifecycle hook
+      community.aws.autoscaling_complete_lifecycle_action:
+        region: '{{ ansible_ec2_placement_region }}'
+        asg_name: 'glab-runner-{{ environment_name }}'
+        lifecycle_hook_name: 'glab-runner-{{ environment_name }}-stop'
+        lifecycle_action_result: CONTINUE
+        instance_id: '{{ ansible_ec2_instance_id }}'

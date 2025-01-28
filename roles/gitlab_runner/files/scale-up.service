@@ -1,0 +1,11 @@
+[Unit]
+Description=Scales up the GitLab Runner
+Requires=monitor-jobs.service
+After=monitor-jobs.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/scale-up.sh
+
+[Install]
+WantedBy=multi-user.target

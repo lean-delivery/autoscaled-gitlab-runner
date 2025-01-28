@@ -1,0 +1,50 @@
+---
+
+- name: Load a system variables file based on distribution or OS family
+  include_vars: '{{ distribution }}'
+  with_first_found:
+    - '{{ ansible_os_family }}.yml'
+    - default.yml
+  loop_control:
+    loop_var: distribution
+
+- name: Choose platform based task
+  ansible.builtin.include_tasks:
+    file: '{{ os_platform }}'
+    apply:
+      become: true
+  with_first_found:
+    - '{{ ansible_os_family }}.yml'
+    - not-supported.yml
+  loop_control:
+    loop_var: os_platform
+
+- name: Setup gitlab runner
+  ansible.builtin.import_tasks: gl_runner.yml
+  become: true
+
+- name: Setup docker
+  ansible.builtin.import_tasks: docker.yml
+  become: true
+
+- name: Setup ansible
+  ansible.builtin.import_tasks: ansible.yml
+  become: true
+
+- name: Setup services
+  ansible.builtin.import_tasks: setup_services.yml
+  vars:
+    services:
+      - name: monitor-jobs
+        enabled: true
+        state: stopped
+      - name: lifecycle-check
+        enabled: true
+        state: stopped
+      - name: unreg-runner
+        enabled: false
+        state: stopped
+      - name: scale-up
+        enabled: false
+        state: stopped
+  become: true

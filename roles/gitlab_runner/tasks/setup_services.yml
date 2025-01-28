@@ -1,0 +1,41 @@
+---
+
+- name: Copy scripts
+  ansible.builtin.template:
+    src: '{{ item.name }}.sh.j2'
+    dest: '/usr/local/bin/{{ item.name }}.sh'
+    mode: '0755'
+  loop: '{{ services }}'
+
+- name: Copy systemd units
+  ansible.builtin.copy:
+    src: '{{ item.name }}.service'
+    dest: '/etc/systemd/system/{{ item.name }}.service'
+    mode: '0644'
+  loop: '{{ services }}'
+
+- name: Create directory for gitlab-runner service override
+  ansible.builtin.file:
+    path: /etc/systemd/system/gitlab-runner.service.d
+    state: directory
+    mode: '0755'
+
+- name: Add override for gitlab-runner graceful shutdown
+  ansible.builtin.copy:
+    src: kill.conf
+    dest: /etc/systemd/system/gitlab-runner.service.d/kill.conf
+    mode: '0644'
+
+- name: Add fetch-imds-env.sh
+  ansible.builtin.copy:
+    src: fetch-imds-env.sh
+    dest: /usr/local/bin/fetch-imds-env.sh
+    mode: '0755'
+
+- name: Manage services
+  ansible.builtin.systemd:
+    name: '{{ item.name }}'
+    enabled: '{{ item.enabled }}'
+    state: '{{ item.state }}'
+    daemon_reload: true
+  loop: '{{ services }}'

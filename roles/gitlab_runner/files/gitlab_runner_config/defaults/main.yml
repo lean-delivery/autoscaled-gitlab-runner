@@ -1,0 +1,42 @@
+---
+gl_concurrency: 6
+gl_runner_name: lean_delivery
+gl_url: 'https://gitlab.com'
+gl_runner_token: '{{ gitlab.runner.token }}'
+gl_metrics_port: 9090
+gl_group_id: 0
+gitlab_tokens: >-
+  {{ lookup('amazon.aws.aws_ssm', '/gitlab_tokens') }}
+gl_api_token: >-
+  {{ gitlab_tokens.runner_token.token }}
+environment_name: '{{ ansible_ec2_tags_instance_environment_name }}'
+ecr_url: docker.io
+docker_image_name: docker
+docker_image_tag: latest
+
+gl_runner_docker_tags:
+  - docker
+  - test
+
+
+# configure gitlab runner config file
+gitlab_global_section:
+  concurrent: '{{ gl_concurrency }}'
+  check_interval: 0
+  connection_max_age: '15m0s'
+  shutdown_timeout: 30
+  listen_address: ':{{ gl_metrics_port }}'
+gitlab_session_server_section:
+  session_server:
+    session_timeout: 1800
+gitlab_runners_section:
+  runners:
+    - name: '{{ ansible_ec2_instance_id }}'
+      url: '{{ gl_url }}'
+      token: '{{ gl_runner_token }}'
+      executor: docker
+      docker:
+        image: '{{ ecr_url }}/{{ docker_image_name }}:{{ docker_image_tag }}'
+        volumes: ['/var/run/docker.sock:/var/run/docker.sock', '/cache']
+        priviledged: true
+        pull_policy: if-not-present

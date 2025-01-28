@@ -1,0 +1,27 @@
+---
+- name: Scale autoscaling group down
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Stop the gitlab-runner service
+      ansible.builtin.systemd:
+        name: gitlab-runner
+        state: stopped
+      become: true
+
+    - name: Get ec2 metadata facts
+      amazon.aws.ec2_metadata_facts:
+
+    - name: Debug metrics
+      ansible.builtin.debug:
+        var: ansible_ec2_instance_id
+
+    - name: Terminate instance
+      ansible.builtin.command:
+        cmd: >-
+          aws autoscaling
+            terminate-instance-in-auto-scaling-group
+            --instance-id {{ ansible_ec2_instance_id }}
+            --should-decrement-desired-capacity
+      changed_when: true

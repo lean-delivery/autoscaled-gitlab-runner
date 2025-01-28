@@ -1,0 +1,29 @@
+---
+gitlab_global_section:
+  concurrent: '{{ gl_concurrency }}'
+  check_interval: 0
+  connection_max_age: '15m0s'
+  shutdown_timeout: 30
+  listen_address: ':{{ gl_metrics_port }}'
+gitlab_session_server_section:
+  session_server:
+    session_timeout: 1800
+gitlab_runners_section:
+  runners:
+    - name: '{{ ansible_ec2_instance_id }}'
+      url: '{{ gl_url }}'
+      token: '{{ gl_runner_token }}'
+      executor: docker
+      docker:
+        image: '{{ ecr_url }}/{{ docker_image_name }}:{{ docker_image_tag }}'
+        volumes: ['/var/run/docker.sock:/var/run/docker.sock', '/cache', '/terraform-cache:/terraform-cache']
+        priviledged: true
+        pull_policy: if-not-present
+      cache:
+        type: s3
+        shared: true
+        path: '{{ gl_cache_path }}'
+        s3:
+          ServerAddress: s3.amazonaws.com
+          BucketName: '{{ gl_cache_bucket }}'
+          BucketLocation: '{{ gl_bucket_location }}'

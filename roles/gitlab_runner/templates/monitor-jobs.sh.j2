@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Prometheus metrics URL
+METRICS_URL="http://localhost:9090/metrics"
+# Threshold for idle jobs (in seconds)
+IDLE_THRESHOLD=${IDLE_THRESHOLD:-180} # Default to 180 seconds
+# Job monitor file
+JOB_MONITOR_FILE="/var/run/job_monitor"
+
+while true
+do
+    # Fetch metrics
+    metrics=$(curl -s --max-time 5 "$METRICS_URL")
+    if [ $? -ne 0 ]; then
+        echo "Failed to fetch metrics from $METRICS_URL"
+        exit 1
+    fi
+
+    # Extract threshold value of concurrent jobs
+    threshold=$(echo "$metrics" | awk '/^gitlab_runner_concurrent/ {print $2}')
+    if [ -z "$threshold" ]; then
+        echo "gitlab_runner_concurrent metric not found."
+        exit 1
+    fi
+
+    # Sum the values of running jobs
+    running_jobs=$(echo "$metrics" | awk '/^gitlab_runner_jobs{executor_stage/ {sum += $2} END {print sum}')
+    running_jobs=${running_jobs:-0}  # Default to 0 if empty
+
+    # Log current status
+    echo "Threshold: ($threshold) jobs, Running Jobs: ($running_jobs)"
+
+    # Publish custom metric to CloudWatch
+    iso_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+    aws cloudwatch put-metric-data --metric-name "JOB_CONCURRENCY" --namespace "$ASG" --value "$threshold" \
+        --dimensions InstanceId="$INSTANCE_ID",InstanceType="$INSTANCE_TYPE" --timestamp "$iso_timestamp"
+    aws cloudwatch put-metric-data --metric-name "JOBS_RUNNING" --namespace "$ASG" --value "$running_jobs" \
+        --dimensions InstanceId="$INSTANCE_ID",InstanceType="$INSTANCE_TYPE" --timestamp "$iso_timestamp"
+
+    if (( running_jobs == 0 )); then
+        # If no running jobs, update the timestamp
+        last_zero_timestamp=$(stat -c %X "$JOB_MONITOR_FILE")
+        current_timestamp=$(date +%s)
+        # Calculate the elapsed time in seconds
+        elapsed_seconds=$((current_timestamp - last_zero_timestamp))
+        if (( elapsed_seconds < IDLE_THRESHOLD )); then
+            echo "Idle threshold: $IDLE_THRESHOLD seconds"
+            echo "No running jobs for $elapsed_seconds seconds. Exiting with success."
+        else
+            echo "No running jobs for $elapsed_seconds seconds."
+            echo "Threshold $IDLE_THRESHOLD seconds reached. Terminating..."
+            systemctl stop gitlab-runner
+            aws autoscaling terminate-instance-in-auto-scaling-group \
+                --instance-id "$INSTANCE_ID" \
+                --should-decrement-desired-capacity
+            exit 0
+        fi
+    else
+        if (( running_jobs < threshold )); then
+            echo "Threshold not yet reached. Continuing monitoring."
+            touch "$JOB_MONITOR_FILE"
+        else
+            echo "Threshold $threshold concurrent jobs reached. Scaling up."
+            systemctl start scale-up.service
+        fi
+    fi
+
+    # Wait 10 seconds before next check
+    sleep 10
+done

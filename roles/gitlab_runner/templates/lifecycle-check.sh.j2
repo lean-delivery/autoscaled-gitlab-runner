@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# AWS metadata URL and the expected response
+TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+METADATA_URL="http://169.254.169.254/latest/meta-data/autoscaling/target-lifecycle-state"
+TERMINATION_URL="http://169.254.169.254/latest/meta-data/spot/termination-time"
+INSTANCE_ACTION_URL="http://169.254.169.254/latest/meta-data/spot/instance-action"
+
+while true
+do
+    # Fetch the lifecycle state from metadata
+    TARGET_LIFECYCLE_STATE=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" --connect-timeout 5 -s -f "$METADATA_URL")
+
+    # Get the termination response and instance action response status codes
+    TERMINATION_RESPONSE=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" --connect-timeout 5 -s -o /dev/null -w "%{http_code}" "$TERMINATION_URL")
+    INSTANCE_ACTION_RESPONSE=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" --connect-timeout 5 -s -o /dev/null -w "%{http_code}" "$INSTANCE_ACTION_URL")
+
+    # Check if the instance is in a terminating or terminated state or if termination is signaled
+    if [[ "$TARGET_LIFECYCLE_STATE" == "Terminated" || \
+          "$TARGET_LIFECYCLE_STATE" == "Terminating:Wait" || \
+          "$TERMINATION_RESPONSE" != "404" || \
+          "$INSTANCE_ACTION_RESPONSE" != "404" ]]
+    then
+        echo "Expected lifecycle state obtained: $TARGET_LIFECYCLE_STATE."
+        echo "Termination response: $TERMINATION_RESPONSE, instance action response: $INSTANCE_ACTION_RESPONSE."
+        echo "Exiting..."
+        exit 0
+    else
+        echo "Current lifecycle state: $TARGET_LIFECYCLE_STATE. Retrying in 5 seconds..."
+        sleep 5
+    fi
+done

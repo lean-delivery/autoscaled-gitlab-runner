@@ -1,0 +1,12 @@
+---
+
+- name: Install ansible packages
+  ansible.builtin.pip:
+    name:
+      - ansible
+      - boto3
+      - botocore
+      - python-gitlab
+    state: present
+    executable: '{{ pip_executable }}'
+    break_system_packages: true

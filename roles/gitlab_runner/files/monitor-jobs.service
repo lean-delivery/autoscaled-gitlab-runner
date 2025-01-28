@@ -1,0 +1,21 @@
+[Unit]
+Description=Monitor GitLab Runner Jobs Above Threshold
+After=lifecycle-check.service
+Wants=lifecycle-check.service
+
+[Service]
+Type=exec
+StandardError=journal
+StandardOutput=journal
+EnvironmentFile=-/etc/default/monitor-jobs
+EnvironmentFile=-/etc/default/user-data
+
+# Fetch environment variables via IMDSv2
+ExecStartPre=+/usr/local/bin/fetch-imds-env.sh
+
+ExecStart=/usr/local/bin/monitor-jobs.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=cloud-init.target

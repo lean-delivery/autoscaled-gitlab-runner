@@ -1,0 +1,153 @@
+{
+    "Comment": "Scale Auto Scaling Group with adjusted input handling",
+    "StartAt": "ParseWebhook",
+    "States": {
+      "ParseWebhook": {
+        "Type": "Pass",
+        "Parameters": {
+          "webhookData.$": "$.body",
+          "gitlabToken.$": "$.head"
+        },
+        "ResultPath": "$.parsedWebhook",
+        "Next": "ValidateSecretToken"
+      },
+      "ValidateSecretToken": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.parsedWebhook.gitlabToken",
+            "StringEquals": "${gitlab_secret_token}",
+            "Next": "CheckBuildStatus"
+          }
+        ],
+        "Default": "InvalidToken"
+      },
+      "InvalidToken": {
+        "Type": "Fail",
+        "Error": "InvalidTokenError",
+        "Cause": "The provided token is invalid."
+      },
+      "CheckBuildStatus": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.parsedWebhook.webhookData",
+            "StringEquals": "created",
+            "Next": "AcquireLock"
+          }
+        ],
+        "Default": "ExitStateMachine"
+      },
+      "ExitStateMachine": {
+        "Type": "Pass",
+        "Result": "No action needed; exiting state machine.",
+        "End": true
+      },
+      "AcquireLock": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::aws-sdk:dynamodb:putItem",
+        "Parameters": {
+          "TableName": "${dynamodb_table_name}",
+          "Item": {
+            "LockID": {
+              "S": "ScalingLock"
+            }
+          },
+          "ConditionExpression": "attribute_not_exists(LockID)"
+        },
+        "Next": "GetCurrentCapacity",
+        "Retry": [
+          {
+            "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+            "IntervalSeconds": 10,
+            "MaxAttempts": 20,
+            "BackoffRate": 2.0
+          }
+        ],
+        "Catch": [
+          {
+            "ErrorEquals": ["States.ALL"],
+            "Next": "HandleError"
+          }
+        ]
+      },
+      "GetCurrentCapacity": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::aws-sdk:autoscaling:describeAutoScalingGroups",
+        "Parameters": {
+          "AutoScalingGroupNames": ["${auto_scaling_group_name}"]
+        },
+        "ResultPath": "$.asgInfo",
+        "Next": "CheckDesiredCapacity",
+        "Catch": [
+          {
+            "ErrorEquals": ["States.ALL"],
+            "Next": "HandleError"
+          }
+        ]
+      },
+      "CheckDesiredCapacity": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.asgInfo.AutoScalingGroups[0].DesiredCapacity",
+            "NumericEquals": 0,
+            "Next": "ScaleUp"
+          }
+        ],
+        "Default": "ReleaseLock"
+      },
+      "ScaleUp": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::aws-sdk:autoscaling:updateAutoScalingGroup",
+        "Parameters": {
+          "AutoScalingGroupName": "${auto_scaling_group_name}",
+          "DesiredCapacity": 1
+        },
+        "Next": "ReleaseLock",
+        "Catch": [
+          {
+            "ErrorEquals": ["States.ALL"],
+            "Next": "HandleError"
+          }
+        ]
+      },
+      "ReleaseLock": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::aws-sdk:dynamodb:deleteItem",
+        "Parameters": {
+          "TableName": "${dynamodb_table_name}",
+          "Key": {
+            "LockID": {
+              "S": "ScalingLock"
+            }
+          }
+        },
+        "End": true,
+        "Catch": [
+          {
+            "ErrorEquals": ["States.ALL"],
+            "Next": "HandleError"
+          }
+        ]
+      },
+      "HandleError": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::aws-sdk:dynamodb:deleteItem",
+        "Parameters": {
+          "TableName": "${dynamodb_table_name}",
+          "Key": {
+            "LockID": {
+              "S": "ScalingLock"
+            }
+          }
+        },
+        "Next": "FailState"
+      },
+      "FailState": {
+        "Type": "Fail",
+        "Error": "ScalingFailed",
+        "Cause": "An error occurred during scaling."
+      }
+    }
+  }

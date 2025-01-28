@@ -1,0 +1,10 @@
+---
+# handlers file for ansible-role-gitlab-runner
+
+- name: Restart gitlab-runner
+  ansible.builtin.systemd:
+    name: gitlab-runner
+    state: restarted
+    enabled: true
+  listen: Kick gitlab-runner
+  become: true

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+flock /tmp/ansible_lock -c "AWS_REGION={{ aws_region }} ansible-playbook -i localhost, -c local {{ ansible_user_dir }}/gl_runner_config/scale_up.yml -e @/tmp/extravars.yml -e @/tmp/gitlab_config.yml"

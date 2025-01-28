@@ -1,0 +1,4 @@
+#!/bin/bash
+
+export AWS_REGION="{{ aws_region }}"
+ansible-playbook -i localhost, -c local {{ ansible_user_dir }}/gitlab_runner_unreg.yml -e @/tmp/extravars.yml -e @/tmp/gitlab_config.yml

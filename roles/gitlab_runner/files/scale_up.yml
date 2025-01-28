@@ -1,0 +1,79 @@
+---
+- name: Scale autoscaling group
+  hosts: localhost
+  connection: local
+  vars:
+    ansible_python_interpreter: auto_silent
+  tasks:
+    - name: Get ec2 metadata facts
+      amazon.aws.ec2_metadata_facts:
+
+    - name: Get gitlab metrics
+      ansible.builtin.uri:
+        url: http://localhost:9090/metrics
+        return_content: true
+      register: metrics
+
+    - name: Debug test threshold
+      ansible.builtin.debug:
+        msg: |
+          limit: {{ jobs_limit }}
+          running: {{ jobs_running }}
+          check: {{ (jobs_running | int) >= (jobs_limit | int) }}
+      vars:
+        jobs_limit: >-
+          {{ metrics.content | regex_search('^gitlab_runner_concurrent\s+(\d+)', '\1', multiline=True) | first }}
+        jobs_running: >-
+          {{ metrics.content | regex_findall('^gitlab_runner_jobs\{.*\s+(\d+)$', multiline=True) | map('int') | sum }}
+
+    - name: Get ASG info
+      amazon.aws.autoscaling_group_info:
+        name: 'dtp-glab-runner-{{ ansible_ec2_tags_instance_environment_name }}'
+      register: asgs
+
+    - name: Scale ASG up
+      amazon.aws.autoscaling_group:
+        name: '{{ asgs.results[0].auto_scaling_group_name }}'
+        desired_capacity: >-
+          {{ (old_capacity | int) + 1 }}
+        wait_for_instances: true
+        lt_check: false
+        lc_check: false
+        health_check_period: 5
+        launch_template: >-
+          {{ asgs.results[0].mixed_instances_policy.launch_template.launch_template_specification }}
+        metrics_collection: true
+        metrics_list:
+          - 'GroupDesiredCapacity'
+          - 'GroupInServiceInstances'
+          - 'GroupMaxSize'
+          - 'GroupMinSize'
+          - 'GroupTotalInstances'
+        mixed_instances_policy:
+          instances_distribution:
+            on_demand_allocation_strategy: lowest-price
+            on_demand_base_capacity: 0
+            on_demand_percentage_above_base_capacity: 0
+            spot_allocation_strategy: price-capacity-optimized
+      register: asg
+      vars:
+        jobs_limit: >-
+          {{ metrics.content | regex_search('^gitlab_runner_concurrent\s+(\d+)', '\1', multiline=True) | first }}
+        jobs_running: >-
+          {{ metrics.content | regex_findall('^gitlab_runner_jobs\{.*\s+(\d+)$', multiline=True) | map('int') | sum }}
+        old_capacity: >-
+          {{ asgs.results[0].desired_capacity }}
+      when: (jobs_running | int) >= (jobs_limit | int)
+
+    - name: Wait for gitlab jobs to decrease
+      ansible.builtin.uri:
+        url: http://localhost:9090/metrics
+        return_content: true
+      register: new_metrics
+      vars:
+        jobs_limit: >-
+          {{ new_metrics.content | regex_search('^gitlab_runner_concurrent\s+(\d+)', '\1', multiline=True) | first }}
+        jobs_running: >-
+          {{ new_metrics.content | regex_findall('^gitlab_runner_jobs\{.*\s+(\d+)$', multiline=True) | map('int') | sum }}
+      retries: 200
+      until: (jobs_running | int) < (jobs_limit | int)

@@ -1,0 +1,11 @@
+[Unit]
+Description=Unreg gitlab-runner and complete termination lifecycle hook
+Requires=lifecycle-check.service
+After=lifecycle-check.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/unreg-runner.sh
+
+[Install]
+WantedBy=multi-user.target

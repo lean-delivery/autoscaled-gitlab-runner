@@ -1,0 +1,17 @@
+[Unit]
+Description=Wait for specific AWS instance metadata
+After=gitlab-runner.service
+Wants=gitlab-runner.service
+OnSuccess=unreg-runner.service
+
+[Service]
+StandardError=journal
+StandardOutput=journal
+Type=exec
+ExecStartPre=+/bin/sh -c 'touch /var/run/job_monitor'
+ExecStart=/usr/local/bin/lifecycle-check.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
