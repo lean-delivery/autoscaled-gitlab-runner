@@ -4,6 +4,10 @@ This document provides a detailed overview of the solution, including lifecycle 
 
 ---
 
+The following diagram displays the solution architecture.
+
+![Solution Architecture](architecture.png)
+
 ## Lifecycle Hooks and Ansible Playbooks
 
 Two Ansible playbooks manage the lifecycle of GitLab Runner instances:
@@ -21,6 +25,7 @@ Two Ansible playbooks manage the lifecycle of GitLab Runner instances:
    - Completes the EC2 lifecycle hook, allowing instance termination to proceed.
 
 ---
+
 
 ## Services Interaction Diagram
 
